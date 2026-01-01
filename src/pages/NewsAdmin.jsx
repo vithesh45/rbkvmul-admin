@@ -2,6 +2,7 @@ import { useState } from "react";
 // Ensure this path matches your actual folder structure
 import { news as initialNews } from "/src/data/news";
 import { getFile, commitFile } from "../utils/github";
+import Swal from "sweetalert2";
 
 export default function NewsAdmin() {
   const [news, setNews] = useState(initialNews);
@@ -43,10 +44,10 @@ export default function NewsAdmin() {
       }
 
       setNews(updatedNews);
-      alert("Success!✅ Changes will be live on the Website in (1-2 mins).");
+      Swal.fire("Success! ✅", "News/Events list updated.", "success");
     } catch (err) {
       console.error(err);
-      alert("Failed to save changes: " + err.message);
+      Swal.fire("Error", err.message, "error");
     } finally {
       setLoading(false);
     }
@@ -72,7 +73,13 @@ export default function NewsAdmin() {
   };
 
   const deleteNews = async (id) => {
-    if (!window.confirm("Are you sure you want to delete this news?")) return;
+    const result = await Swal.fire({
+      title: 'Are you sure?',
+      text: "This will delete the News/Events permanently.",
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Yes, delete it!'
+    });
     const updated = news.filter((n) => n.id !== id);
     await saveToRepo(updated);
   };

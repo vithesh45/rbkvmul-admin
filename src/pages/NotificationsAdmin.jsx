@@ -2,6 +2,7 @@ import { useState } from "react";
 // Fixed the typo in the import path
 import { notifications as initialNotifications } from "/src/data/notofications";
 import { getFile, commitFile } from "../utils/github";
+import Swal from "sweetalert2";
 
 export default function NotificationsAdmin() {
   const [notifications, setNotifications] = useState(initialNotifications);
@@ -33,10 +34,10 @@ export default function NotificationsAdmin() {
       });
 
       setNotifications(updatedData);
-      alert("Success!✅ Changes will reflect on the live site in 1-2 minutes.");
+      Swal.fire("Success! ✅", "Notification list updated.", "success");
     } catch (err) {
       console.error(err);
-      alert("Failed to update : " + err.message);
+      Swal.fire("Error", err.message, "error");
     } finally {
       setLoading(false);
     }
@@ -44,8 +45,7 @@ export default function NotificationsAdmin() {
 
   const addNotification = async () => {
     if (!form.titleEn || !form.date) {
-      alert("English title and Date are required");
-      return;
+     return Swal.fire("Warning", "Title and Date are required", "warning");
     }
 
     const updated = [
@@ -65,7 +65,13 @@ export default function NotificationsAdmin() {
   };
 
   const deleteNotification = async (id) => {
-    if (!window.confirm("Are you sure you want to delete this notification?")) return;
+    const result = await Swal.fire({
+      title: 'Are you sure?',
+      text: "This will delete the notification permanently.",
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Yes, delete it!'
+    });
     
     const updated = notifications.filter((n) => n.id !== id);
     await saveToRepo(updated);

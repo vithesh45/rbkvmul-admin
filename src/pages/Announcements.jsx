@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { popupData as initialData } from "/src/data/popupData"; 
 import { getFile, commitFile } from "../utils/github";
+import Swal from "sweetalert2";
 
 export default function AnnouncementAdmin() {
   
@@ -24,7 +25,7 @@ export default function AnnouncementAdmin() {
 
   const handleSave = async () => {
     if (!data.subtitle.en || !imageFile) {
-      alert("Please fill in the English Subtitle and select an image before publishing.");
+      Swal.fire("Please fill in the English Subtitle and select an image.", "warning");
       return;
     }
 
@@ -66,9 +67,14 @@ export default function AnnouncementAdmin() {
         image: currentData.image
       });
       setImageFile(null);
-      alert("Published successfully!✅ Refresh the Website in 2 minutes.");
+     Swal.fire({
+        title: 'Published! ✅',
+        text: 'The website will update in 2 minutes.',
+        icon: 'success',
+        confirmButtonColor: '#0a4da2'
+      });
     } catch (err) {
-      alert("Error: " + err.message);
+      Swal.fire("Error", err.message, "error");
     } finally {
       setLoading(false);
     }
