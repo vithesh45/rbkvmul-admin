@@ -1,17 +1,35 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 // Fixed the typo in the import path
-import { notifications as initialNotifications } from "/src/data/notofications";
+// import { notifications as initialNotifications } from "/src/data/notofications";
 import { getFile, commitFile } from "../utils/github";
 import Swal from "sweetalert2";
 
 export default function NotificationsAdmin() {
-  const [notifications, setNotifications] = useState(initialNotifications);
-  const [loading, setLoading] = useState(false);
+  const [notifications, setNotifications] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({
     titleEn: "",
     titleKa: "",
     date: "",
   });
+
+  useEffect(() => {
+    const fetchLiveNotifs = async () => {
+      try {
+        const file = await getFile("src/data/notofications.js");
+        if (file && file.content) {
+          const decoded = atob(file.content);
+          const match = decoded.match(/\[[\s\S]*\]/);
+          if (match) setNotifications(JSON.parse(match[0]));
+        }
+      } catch (err) {
+        console.error("Notifications Fetch Error:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchLiveNotifs();
+  }, []);
 
   // Save changes to GitHub repo
   const saveToRepo = async (updatedData) => {

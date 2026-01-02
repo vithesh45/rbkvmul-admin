@@ -1,14 +1,37 @@
-import { useState } from "react";
-import { news as initialNews } from "/src/data/news";
+import { useState, useEffect } from "react";
+// Ensure this path matches your actual folder structure
+// import { news as initialNews } from "/src/data/news";
 import { getFile, commitFile } from "../utils/github";
 import Swal from "sweetalert2";
 
 export default function NewsAdmin() {
-  const [news, setNews] = useState(initialNews);
-  const [loading, setLoading] = useState(false);
+  const [news, setNews] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({
     titleEn: "", titleKa: "", descEn: "", descKa: "", imageFile: null,
   });
+
+useEffect(() => {
+  const loadInitialData = async () => {
+    try {
+      const file = await getFile("src/data/news.js");
+      if (file && file.content) {
+        // GitHub returns base64, so we decode it
+        const decoded = atob(file.content);
+        // This regex extracts the array [ ... ] from the file string
+        const match = decoded.match(/\[[\s\S]*\]/);
+        if (match) {
+          setNews(JSON.parse(match[0]));
+        }
+      }
+    } catch (err) {
+      console.error("Fetch error:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+  loadInitialData();
+}, []);
 
   const toBase64 = (file) => new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -20,21 +43,19 @@ export default function NewsAdmin() {
   const saveToRepo = async (updatedNews, newImageData = null) => {
     setLoading(true);
     try {
-      const filePath = "src/data/news.js";
-      const file = await getFile(filePath);
-      
-      if (!file) throw new Error("File not found on GitHub.");
-
+      // 1. Update the Data File
+      const file = await getFile("src/data/news.js");
       const content = `export const news = ${JSON.stringify(updatedNews, null, 2)};`;
 
       await commitFile({
-        path: filePath,
+        path: "src/data/news.js",
         sha: file.sha,
         content,
         message: "Update news data",
         isBase64: false,
       });
 
+      // 2. Upload Image to public/images/
       if (newImageData) {
         await commitFile({
           path: `public/images/${newImageData.name}`,
@@ -44,9 +65,10 @@ export default function NewsAdmin() {
         });
       }
 
-      setNews(updatedNews); // Update UI immediately
-      Swal.fire("Success! ✅", "News list updated.", "success");
+      setNews(updatedNews);
+      Swal.fire("Success! ✅", "News/Events list updated.", "success");
     } catch (err) {
+      console.error(err);
       Swal.fire("Error", err.message, "error");
     } finally {
       setLoading(false);
@@ -63,6 +85,7 @@ export default function NewsAdmin() {
       id: Date.now(),
       title: { en: form.titleEn, ka: form.titleKa || form.titleEn },
       description: { en: form.descEn, ka: form.descKa || form.descEn },
+      // This MUST start with /images/ so the website knows where to look
       image: `/images/${fileName}`,
     };
 
@@ -77,14 +100,10 @@ export default function NewsAdmin() {
       text: "This will delete the News/Events permanently.",
       icon: 'warning',
       showCancelButton: true,
-      confirmButtonColor: '#dc3545',
       confirmButtonText: 'Yes, delete it!'
     });
-
-    if (result.isConfirmed) {
-      const updated = news.filter((n) => n.id !== id);
-      await saveToRepo(updated);
-    }
+    const updated = news.filter((n) => n.id !== id);
+    await saveToRepo(updated);
   };
 
   const renderText = (field, lang) => {
@@ -95,6 +114,7 @@ export default function NewsAdmin() {
   return (
     <div style={styles.container}>
       <h2 style={styles.header}>News Management Dashboard</h2>
+
       <div style={styles.card}>
         <h3 style={{ marginTop: 0 }}>Add New Article</h3>
         <div style={styles.formGrid}>
@@ -102,29 +122,51 @@ export default function NewsAdmin() {
           <input style={styles.input} placeholder="Title (KN)" value={form.titleKa} onChange={e => setForm({ ...form, titleKa: e.target.value })} />
           <textarea style={styles.input} placeholder="Description (EN)" value={form.descEn} onChange={e => setForm({ ...form, descEn: e.target.value })} />
           <textarea style={styles.input} placeholder="Description (KN)" value={form.descKa} onChange={e => setForm({ ...form, descKa: e.target.value })} />
+
           <div style={styles.fileInputWrapper}>
             <label>Upload Image: </label>
             <input type="file" accept="image/*" onChange={e => setForm({ ...form, imageFile: e.target.files[0] })} />
           </div>
+
           <button style={styles.addButton} onClick={addNews} disabled={loading}>
-            {loading ? "Publishing..." : "Publish News"}
+            {loading ? "Publishing the changes..." : "Publish News"}
           </button>
         </div>
       </div>
-      <div style={styles.list}>
+
+      <div style={styles.list} className="news-list">
         {news.map((item) => (
-          <div key={item.id} style={styles.listItem}>
-            <img src={item.image} alt="" style={{ width: "190px", height: "190px", objectFit: "cover", borderRadius: "4px" }} 
-              onError={(e) => { e.target.src = `https://rbkvmul-website.vercel.app/${item.image.replace(/^\//, '')}`; }} />
-            <div style={{ flex: 1 }}>
+          <div key={item.id} style={styles.listItem} className="news-item">
+            {/* Fix Admin Preview Path */}
+            <img
+              src={item.image}
+              
+              alt=""
+              style={{ width: "190px", height: "190px", objectFit: "cover", borderRadius: "4px" }}
+              onError={(e) => {
+                // If the local path fails, try the live website path
+                const liveUrl = `https://rbkvmul-website.vercel.app/${item.image.replace(/^\//, '')}`;
+                if (e.target.src !== liveUrl) {
+                  e.target.src = liveUrl;
+                } else {
+                  e.target.src = "https://via.placeholder.com/80x50?text=Uploading...";
+                }
+              }}
+            />
+            <div style={{ flex: 1 }} className="news-item-content">
               <div style={styles.langTag}>English</div>
               <h4 style={styles.itemTitle}>{renderText(item.title, 'en')}</h4>
               <p style={styles.itemDesc}>{renderText(item.description, 'en')}</p>
+
               <div style={{ ...styles.langTag, marginTop: 10 }}>Kannada</div>
               <h4 style={styles.itemTitle}>{renderText(item.title, 'ka')}</h4>
               <p style={styles.itemDesc}>{renderText(item.description, 'ka')}</p>
             </div>
-            <button onClick={() => deleteNews(item.id)} style={styles.deleteButton} disabled={loading}>Delete</button>
+          <div style={styles.actionBox} >
+              <button onClick={() => deleteNews(item.id)} style={styles.deleteButton} disabled={loading}>
+                Delete
+              </button>
+            </div>
           </div>
         ))}
       </div>
@@ -133,8 +175,8 @@ export default function NewsAdmin() {
 }
 
 const styles = {
-  container: { padding: "40px 20px", maxWidth: "1000px", margin: "auto", fontFamily: "sans-serif" },
-  header: { textAlign: "center", marginBottom: 30 },
+  container: { padding: "40px 20px", maxWidth: "1000px", margin: "auto", fontFamily: "system-ui, sans-serif", backgroundColor: "#f9f9f9" },
+  header: { textAlign: "center", color: "#333", marginBottom: 30 },
   card: { background: "#fff", padding: 24, borderRadius: 12, boxShadow: "0 4px 6px rgba(0,0,0,0.1)", marginBottom: 40 },
   formGrid: { display: "flex", flexDirection: "column", gap: 12 },
   input: { padding: 12, borderRadius: 6, border: "1px solid #ddd", fontSize: 16 },
@@ -142,8 +184,10 @@ const styles = {
   addButton: { padding: "14px", backgroundColor: "#007bff", color: "#fff", border: "none", borderRadius: 6, cursor: "pointer", fontWeight: "bold" },
   list: { display: "flex", flexDirection: "column", gap: 16 },
   listItem: { display: "flex", gap: 20, background: "#fff", padding: 20, borderRadius: 12, border: "1px solid #eee", alignItems: "start" },
+  thumb: { width: 150, height: 100, borderRadius: 8, objectFit: "cover", background: "#eee" },
   itemTitle: { margin: "4px 0", fontSize: 18 },
   itemDesc: { margin: 0, color: "#666", fontSize: 14 },
-  langTag: { fontSize: 10, textTransform: "uppercase", color: "#999", fontWeight: "bold" },
-  deleteButton: { backgroundColor: "transparent", color: "#dc3545", border: "1px solid #dc3545", padding: "8px 16px", borderRadius: "6px", cursor: "pointer" }
+  langTag: { fontSize: 10, textTransform: "uppercase", letterSpacing: 1, color: "#999", fontWeight: "bold" },
+  // deleteButton: { backgroundColor: "#fff", color: "#dc3545", border: "1px solid #dc3545", padding: "5px 4px", borderRadius: 6, cursor: "pointer", transition: "all 0.2s" },
+   actionBox: { display: "flex", alignItems: "flex-start" ,  flexShrink: 0 },
 };
