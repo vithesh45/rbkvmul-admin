@@ -75,6 +75,7 @@ export default function AnnouncementAdmin() {
       });
     } catch (err) {
       Swal.fire("Error", err.message, "error");
+      
     } finally {
       setLoading(false);
     }

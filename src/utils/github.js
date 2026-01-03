@@ -5,8 +5,28 @@ const headers = () => ({
   Accept: "application/vnd.github+json",
 });
 
+// Helper to encode UTF-8 text to base64 (for Kannada, etc.)
+function encodeBase64UTF8(text) {
+  const bytes = new TextEncoder().encode(text);
+  const binString = Array.from(bytes, byte => String.fromCodePoint(byte)).join("");
+  return btoa(binString);
+}
+
+// Helper to decode base64 to UTF-8 text
+function decodeBase64UTF8(base64) {
+try {
+    const binString = atob(base64);
+    const bytes = Uint8Array.from(binString, (m) => m.codePointAt(0));
+    // The "fatal: false" ensures it doesn't choke on weird characters
+    return new TextDecoder("utf-8", { fatal: false }).decode(bytes);
+  } catch (e) {
+    console.error("Decoding failed", e);
+    return atob(base64); // Fallback
+  }
+}
+
 export async function getFile(path) {
-  const url = `${API}/repos/${import.meta.env.VITE_GITHUB_OWNER}/${import.meta.env.VITE_GITHUB_REPO}/contents/${path}`;
+  const url = `${API}/repos/${import.meta.env.VITE_GITHUB_OWNER}/${import.meta.env.VITE_GITHUB_REPO}/contents/${path}?t=${Date.now()}`;
   
   const res = await fetch(url, { 
     headers: headers(), 
@@ -14,7 +34,6 @@ export async function getFile(path) {
   });
 
   if (!res.ok) {
-    // THIS WILL TELL US IF IT'S A TOKEN ISSUE OR A PATH ISSUE
     console.error(`GITHUB ERROR STATUS: ${res.status}`);
     const errorBody = await res.json();
     console.error("GITHUB ERROR MESSAGE:", errorBody.message);
@@ -25,13 +44,10 @@ export async function getFile(path) {
 
 export async function commitFile({ path, content, message, sha, isBase64 = false }) {
   // If it's an image, it's already base64. 
-  // If it's the JS file text, we encode it.
- // Replace the old encodedContent line with this:
-const encodedContent = isBase64 
-  ? content 
-  : btoa(encodeURIComponent(content).replace(/%([0-9A-F]{2})/g, (match, p1) => {
-      return String.fromCharCode('0x' + p1);
-    }));
+  // If it's text (like JS files with Kannada), use UTF-8 safe encoding
+  const encodedContent = isBase64
+    ? content
+    : encodeBase64UTF8(content);
 
   const body = {
     message,
@@ -56,3 +72,6 @@ const encodedContent = isBase64
   }
   return res.json();
 }
+
+// Export for use in components if needed
+export { decodeBase64UTF8 };

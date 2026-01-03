@@ -1,7 +1,5 @@
 import { useState, useEffect } from "react";
-// Ensure this path matches your actual folder structure
-// import { news as initialNews } from "/src/data/news";
-import { getFile, commitFile } from "../utils/github";
+import { getFile, commitFile, decodeBase64UTF8 } from "../utils/github";
 import Swal from "sweetalert2";
 
 export default function NewsAdmin() {
@@ -11,27 +9,26 @@ export default function NewsAdmin() {
     titleEn: "", titleKa: "", descEn: "", descKa: "", imageFile: null,
   });
 
-useEffect(() => {
-  const loadInitialData = async () => {
-    try {
-      const file = await getFile("src/data/news.js");
-      if (file && file.content) {
-        // GitHub returns base64, so we decode it
-        const decoded = atob(file.content);
-        // This regex extracts the array [ ... ] from the file string
-        const match = decoded.match(/\[[\s\S]*\]/);
-        if (match) {
-          setNews(JSON.parse(match[0]));
+  useEffect(() => {
+    const loadInitialData = async () => {
+      try {
+        const file = await getFile("src/data/news.js");
+        if (file && file.content) {
+          // Use proper UTF-8 decoding for Kannada text
+          const decoded = decodeBase64UTF8(file.content);
+          const match = decoded.match(/\[[\s\S]*\]/);
+          if (match) {
+            setNews(JSON.parse(match[0]));
+          }
         }
+      } catch (err) {
+        console.error("Fetch error:", err);
+      } finally {
+        setLoading(false);
       }
-    } catch (err) {
-      console.error("Fetch error:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-  loadInitialData();
-}, []);
+    };
+    loadInitialData();
+  }, []);
 
   const toBase64 = (file) => new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -85,7 +82,6 @@ useEffect(() => {
       id: Date.now(),
       title: { en: form.titleEn, ka: form.titleKa || form.titleEn },
       description: { en: form.descEn, ka: form.descKa || form.descEn },
-      // This MUST start with /images/ so the website knows where to look
       image: `/images/${fileName}`,
     };
 
@@ -94,6 +90,7 @@ useEffect(() => {
     setForm({ titleEn: "", titleKa: "", descEn: "", descKa: "", imageFile: null });
   };
 
+  
   const deleteNews = async (id) => {
     const result = await Swal.fire({
       title: 'Are you sure?',
@@ -102,8 +99,10 @@ useEffect(() => {
       showCancelButton: true,
       confirmButtonText: 'Yes, delete it!'
     });
-    const updated = news.filter((n) => n.id !== id);
-    await saveToRepo(updated);
+    if (result.isConfirmed) {
+      const updated = news.filter((n) => n.id !== id);
+      await saveToRepo(updated);
+    }
   };
 
   const renderText = (field, lang) => {
@@ -137,14 +136,11 @@ useEffect(() => {
       <div style={styles.list} className="news-list">
         {news.map((item) => (
           <div key={item.id} style={styles.listItem} className="news-item">
-            {/* Fix Admin Preview Path */}
             <img
               src={item.image}
-              
               alt=""
               style={{ width: "190px", height: "190px", objectFit: "cover", borderRadius: "4px" }}
               onError={(e) => {
-                // If the local path fails, try the live website path
                 const liveUrl = `https://rbkvmul-website.vercel.app/${item.image.replace(/^\//, '')}`;
                 if (e.target.src !== liveUrl) {
                   e.target.src = liveUrl;
@@ -162,7 +158,7 @@ useEffect(() => {
               <h4 style={styles.itemTitle}>{renderText(item.title, 'ka')}</h4>
               <p style={styles.itemDesc}>{renderText(item.description, 'ka')}</p>
             </div>
-          <div style={styles.actionBox} >
+            <div style={styles.actionBox}>
               <button onClick={() => deleteNews(item.id)} style={styles.deleteButton} disabled={loading}>
                 Delete
               </button>
@@ -184,10 +180,9 @@ const styles = {
   addButton: { padding: "14px", backgroundColor: "#007bff", color: "#fff", border: "none", borderRadius: 6, cursor: "pointer", fontWeight: "bold" },
   list: { display: "flex", flexDirection: "column", gap: 16 },
   listItem: { display: "flex", gap: 20, background: "#fff", padding: 20, borderRadius: 12, border: "1px solid #eee", alignItems: "start" },
-  thumb: { width: 150, height: 100, borderRadius: 8, objectFit: "cover", background: "#eee" },
   itemTitle: { margin: "4px 0", fontSize: 18 },
   itemDesc: { margin: 0, color: "#666", fontSize: 14 },
   langTag: { fontSize: 10, textTransform: "uppercase", letterSpacing: 1, color: "#999", fontWeight: "bold" },
-  // deleteButton: { backgroundColor: "#fff", color: "#dc3545", border: "1px solid #dc3545", padding: "5px 4px", borderRadius: 6, cursor: "pointer", transition: "all 0.2s" },
-   actionBox: { display: "flex", alignItems: "flex-start" ,  flexShrink: 0 },
+  deleteButton: { backgroundColor: "#fff", color: "#dc3545", border: "1px solid #dc3545", padding: "8px 16px", borderRadius: 6, cursor: "pointer" },
+  actionBox: { display: "flex", alignItems: "flex-start", flexShrink: 0 },
 };

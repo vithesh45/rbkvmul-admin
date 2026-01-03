@@ -1,7 +1,5 @@
 import { useState, useEffect } from "react";
-// Fixed the typo in the import path
-// import { notifications as initialNotifications } from "/src/data/notofications";
-import { getFile, commitFile } from "../utils/github";
+import { getFile, commitFile, decodeBase64UTF8 } from "../utils/github";
 import Swal from "sweetalert2";
 
 export default function NotificationsAdmin() {
@@ -18,7 +16,8 @@ export default function NotificationsAdmin() {
       try {
         const file = await getFile("src/data/notofications.js");
         if (file && file.content) {
-          const decoded = atob(file.content);
+          // Use proper UTF-8 decoding for Kannada text
+          const decoded = decodeBase64UTF8(file.content);
           const match = decoded.match(/\[[\s\S]*\]/);
           if (match) setNotifications(JSON.parse(match[0]));
         }
@@ -63,7 +62,7 @@ export default function NotificationsAdmin() {
 
   const addNotification = async () => {
     if (!form.titleEn || !form.date) {
-     return Swal.fire("Warning", "Title and Date are required", "warning");
+      return Swal.fire("Warning", "Title and Date are required", "warning");
     }
 
     const updated = [
@@ -75,7 +74,7 @@ export default function NotificationsAdmin() {
         },
         date: form.date,
       },
-      ...notifications, // Adds new ones to the top
+      ...notifications,
     ];
 
     await saveToRepo(updated);
@@ -91,15 +90,16 @@ export default function NotificationsAdmin() {
       confirmButtonText: 'Yes, delete it!'
     });
     
-    const updated = notifications.filter((n) => n.id !== id);
-    await saveToRepo(updated);
+    if (result.isConfirmed) {
+      const updated = notifications.filter((n) => n.id !== id);
+      await saveToRepo(updated);
+    }
   };
 
   return (
     <div style={styles.container}>
       <h2 style={styles.header}>Manage Notifications</h2>
 
-      {/* ADD FORM CARD */}
       <div style={styles.card}>
         <h3 style={{ marginTop: 0 }}>Create New Notification</h3>
         <div style={styles.formGrid}>
@@ -134,7 +134,6 @@ export default function NotificationsAdmin() {
 
       <hr style={styles.divider} />
 
-      {/* LIST SECTION */}
       <div style={styles.list}>
         {notifications.map((item) => (
           <div key={item.id} style={styles.listItem}>
@@ -150,7 +149,6 @@ export default function NotificationsAdmin() {
               onClick={() => deleteNotification(item.id)}
               style={styles.deleteButton}
               disabled={loading}
-               
             >
               Delete
             </button>
